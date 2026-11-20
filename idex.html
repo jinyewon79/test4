@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>서초영양길잡이 접수 관리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* 레이아웃: 상단 제목 + 탭 4개(접수 / 출석 확인 / 문자목록 / 출석부), 한 화면에서 순서대로 작업 */
+:root {
+  --bg: #f4f6f2;
+  --card: #ffffff;
+  --ink: #1d2a22;
+  --muted: #66746b;
+  --line: #dde4dc;
+  --accent: #2c7a56;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3f1e9;
+  --warn: #a5560a;
+  --warn-soft: #fbeedd;
+  --bad: #b3382c;
+  --bad-soft: #fbe6e3;
+  --font: "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #131a16; --card: #1b241f; --ink: #e6eee8; --muted: #94a39a; --line: #2c3a32;
+    --accent: #55b98a; --accent-ink: #0f1d16; --accent-soft: #1f3629;
+    --warn: #e0a15a; --warn-soft: #3a2c19; --bad: #ee8b80; --bad-soft: #3d2320;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #131a16; --card: #1b241f; --ink: #e6eee8; --muted: #94a39a; --line: #2c3a32;
+  --accent: #55b98a; --accent-ink: #0f1d16; --accent-soft: #1f3629;
+  --warn: #e0a15a; --warn-soft: #3a2c19; --bad: #ee8b80; --bad-soft: #3d2320;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 400 15px/1.55 var(--font); }
+button, input, select, textarea { font: inherit; color: inherit; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 64px; display: flex; flex-direction: column; gap: 16px; }
+h1 { font-size: 20px; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 16px; margin: 0; font-weight: 700; }
+.sub { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+.top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; align-items: flex-end; }
+
+.banner { border-radius: 8px; padding: 10px 14px; font-size: 14px; display: none; }
+.banner.show { display: block; }
+.banner.info { background: var(--accent-soft); }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+.banner.bad { background: var(--bad-soft); color: var(--bad); }
+
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tab { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; cursor: pointer; color: var(--muted); font-weight: 500; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+.tab:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.field input, .field select, .field textarea { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; padding: 8px 10px; min-width: 0; }
+.field textarea { resize: vertical; min-height: 64px; width: 100%; }
+.grid { display: grid; gap: 10px 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; }
+.grow { flex: 1 1 260px; }
+
+.btn { border: 1px solid var(--line); background: var(--card); border-radius: 6px; padding: 8px 14px; cursor: pointer; font-weight: 500; }
+.btn:hover { background: var(--bg); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.sm { padding: 4px 10px; font-size: 13px; }
+.btn.danger { color: var(--bad); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.msg { font-size: 13px; min-height: 20px; }
+.msg.err { color: var(--bad); }
+.msg.ok { color: var(--accent); }
+
+.stats { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { background: var(--accent-soft); border-radius: 999px; padding: 3px 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.pill.mute { background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 12px; color: var(--muted); font-weight: 500; }
+td.wrapcell { white-space: normal; min-width: 260px; }
+tr.cancel td { color: var(--muted); text-decoration: line-through; }
+tr.cancel td.acts { text-decoration: none; }
+td.acts { display: flex; gap: 6px; }
+.empty { color: var(--muted); padding: 18px 4px; text-align: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--card); padding: 6px 16px; cursor: pointer; font-weight: 500; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on-in { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.seg button.on-out { background: var(--bad); color: #fff; font-weight: 700; }
+
+.sheet { border: 1px solid var(--line); border-radius: 8px; padding: 18px; background: var(--card); }
+.sheet h3 { margin: 0 0 4px; font-size: 17px; }
+.sheet .when { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+.sheet td.sign { width: 160px; }
+.sheet td, .sheet th { border: 1px solid var(--line); }
+.sheet tr { height: 38px; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; max-width: calc(100% - 32px); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.toast.show { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>서초영양길잡이 접수 관리</h1>
+      <p class="sub">접수 입력, 출석 확인, 안내 문자 목록, 출석부를 한 곳에서 처리합니다.</p>
+    </div>
+    <div class="stats" id="topStats"></div>
+  </div>
+
+  <div class="banner info show" id="banner">저장소에 연결하는 중입니다.</div>
+
+  <div class="tabs" role="tablist" id="tabs">
+    <button class="tab" role="tab" data-tab="reg" aria-selected="true">1. 접수</button>
+    <button class="tab" role="tab" data-tab="att" aria-selected="false">2. 출석 확인</button>
+    <button class="tab" role="tab" data-tab="sms" aria-selected="false">3. 문자목록</button>
+    <button class="tab" role="tab" data-tab="sheet" aria-selected="false">4. 출석부</button>
+  </div>
+
+  <div class="card" id="sessionBar">
+    <div class="bar">
+      <div class="field grow">
+        <label for="sessionSel">교육 회차</label>
+        <select id="sessionSel"></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- 접수 -->
+  <section id="tab-reg" class="tabpane" style="display:flex;flex-direction:column;gap:16px">
+    <div class="card">
+      <h2>접수 입력</h2>
+      <form id="regForm" autocomplete="off">
+        <div class="grid">
+          <div class="field">
+            <label for="fProgram">프로그램명</label>
+            <input id="fProgram" list="programList" placeholder="예: 저염식단 실천교실" required>
+            <datalist id="programList"></datalist>
+          </div>
+          <div class="field">
+            <label for="fWhen">교육일시</label>
+            <input id="fWhen" type="datetime-local" required>
+          </div>
+          <div class="field">
+            <label for="fName">성명</label>
+            <input id="fName" required>
+          </div>
+          <div class="field">
+            <label for="fBirth">생년월일 (8자리)</label>
+            <input id="fBirth" inputmode="numeric" maxlength="10" placeholder="19650412" required>
+          </div>
+          <div class="field">
+            <label for="fPhone">전화번호</label>
+            <input id="fPhone" inputmode="tel" placeholder="010-0000-0000" required>
+          </div>
+          <div class="field">
+            <button class="btn primary" type="submit" id="addBtn" disabled>접수 추가</button>
+          </div>
+        </div>
+        <div class="msg" id="regMsg" role="status"></div>
+      </form>
+    </div>
+    <div class="card">
+      <div class="bar" style="justify-content:space-between;align-items:center">
+        <h2>접수 명단</h2>
+        <div class="stats" id="regStats"></div>
+      </div>
+      <div class="tablewrap" id="regList"></div>
+    </div>
+  </section>
+
+  <!-- 출석 확인 -->
+  <section id="tab-att" class="tabpane" style="display:none;flex-direction:column;gap:16px">
+    <div class="card">
+      <div class="bar" style="justify-content:space-between;align-items:center">
+        <h2>출석 확인</h2>
+        <div class="stats" id="attStats"></div>
+      </div>
+      <div class="bar"><button class="btn" id="allIn" type="button">미확인 전원 출석 처리</button></div>
+      <div class="tablewrap" id="attList"></div>
+    </div>
+  </section>
+
+  <!-- 문자목록 -->
+  <section id="tab-sms" class="tabpane" style="display:none;flex-direction:column;gap:16px">
+    <div class="card">
+      <h2>문자 보낼 대상</h2>
+      <div class="bar">
+        <div class="field">
+          <label for="smsDate">교육일</label>
+          <input id="smsDate" type="date">
+        </div>
+        <button class="btn" id="smsTomorrow" type="button">내일</button>
+        <button class="btn" id="smsToday" type="button">오늘</button>
+      </div>
+      <div class="field">
+        <label for="tpl">문자 문구 ({성명} {일시} {프로그램} 사용 가능)</label>
+        <textarea id="tpl"></textarea>
+      </div>
+      <div class="bar"><button class="btn" id="saveTpl" type="button">문구 저장</button><span class="msg" id="tplMsg" role="status"></span></div>
+    </div>
+    <div class="card">
+      <div class="bar" style="justify-content:space-between;align-items:center">
+        <h2>발송 목록</h2>
+        <div class="stats" id="smsStats"></div>
+      </div>
+      <div class="bar">
+        <button class="btn primary" id="smsCopy" type="button">표 복사 (성명·번호·문구)</button>
+        <button class="btn" id="smsCsv" type="button">엑셀용 CSV 저장</button>
+      </div>
+      <div class="tablewrap" id="smsList"></div>
+    </div>
+  </section>
+
+  <!-- 출석부 -->
+  <section id="tab-sheet" class="tabpane" style="display:none;flex-direction:column;gap:16px">
+    <div class="card">
+      <h2>출석부</h2>
+      <div class="bar">
+        <button class="btn primary" id="sheetHtml" type="button">출력용 파일 저장</button>
+        <button class="btn" id="sheetCsv" type="button">엑셀용 CSV 저장</button>
+      </div>
+      <p class="sub" style="margin:0">출력용 파일을 저장해 열고 인쇄(Ctrl+P)하면 A4 한 장 서식으로 나옵니다. 취소자는 제외됩니다.</p>
+      <div id="sheetPreview"></div>
+    </div>
+  </section>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var DEFAULT_TPL = "[서초영양길잡이] {성명}님, {일시} '{프로그램}' 교육이 있습니다. 참석이 어려우시면 미리 연락 부탁드립니다.";
+  var state = { rows: [], tab: 'reg', session: null, tpl: DEFAULT_TPL, ready: false, persisted: false };
+  var store = null;
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------- 유틸 ---------- */
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  function ymd(d) { return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()); }
+  function addDays(n) { var d = new Date(); d.setDate(d.getDate() + n); return d; }
+  function toDate(eduAt) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(eduAt || '');
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+  }
+  function koWhen(eduAt) {
+    var d = toDate(eduAt); if (!d) return '';
+    return (d.getMonth() + 1) + '월 ' + d.getDate() + '일(' + '일월화수목금토'.charAt(d.getDay()) + ') ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+  }
+  function dayOf(eduAt) { return String(eduAt || '').slice(0, 10); }
+  function fmtBirth(b) { b = String(b || ''); return b.length === 8 ? b.slice(0, 4) + '.' + b.slice(4, 6) + '.' + b.slice(6) : b; }
+  function normPhone(v) {
+    var s = String(v || '').replace(/[^0-9]/g, '');
+    if (s.length === 10 && s.charAt(0) === '1') s = '0' + s;
+    if (s.length === 11) return s.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (s.length === 10 && s.indexOf('02') === 0) return s.replace(/(\d{2})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (s.length === 10) return s.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return '';
+  }
+  function normBirth(v) {
+    var s = String(v || '').replace(/[^0-9]/g, '');
+    if (s.length !== 8) return '';
+    var y = +s.slice(0, 4), m = +s.slice(4, 6), d = +s.slice(6);
+    var t = new Date(y, m - 1, d);
+    if (y < 1900 || t.getFullYear() !== y || t.getMonth() !== m - 1 || t.getDate() !== d) return '';
+    return s;
+  }
+  function sessionKey(r) { return r.program + '|' + r.eduAt; }
+  function sessionLabel(r) { return koWhen(r.eduAt) + ' · ' + r.program; }
+  function active(rows) { return rows.filter(function (r) { return r.status !== '취소'; }); }
+  function toast(t) {
+    var el = $('toast'); el.textContent = t; el.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { el.classList.remove('show'); }, 2600);
+  }
+  function setBanner(kind, text) {
+    var b = $('banner'); b.className = 'banner ' + kind + (text ? ' show' : ''); b.textContent = text || '';
+  }
+  function fillTemplate(r) {
+    return state.tpl.split('{성명}').join(r.name).split('{일시}').join(koWhen(r.eduAt)).split('{프로그램}').join(r.program);
+  }
+  function csvCell(v) { v = String(v == null ? '' : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function toCsv(rows) { return '﻿' + rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n'); }
+  function safeName(s) { return String(s).replace(/[\\/:*?"<>|\s]+/g, '_'); }
+
+  /* ---------- 저장소 ---------- */
+  function makeLocalStore() {
+    return {
+      add: function (d) { var id = 'l' + Date.now() + Math.random().toString(36).slice(2, 6); state.rows.push(Object.assign({ id: id }, d)); sortRows(); renderAll(); return Promise.resolve(); },
+      update: function (id, patch) { var r = state.rows.filter(function (x) { return x.id === id; })[0]; if (r) Object.assign(r, patch); renderAll(); return Promise.resolve(); },
+      remove: function (id) { state.rows = state.rows.filter(function (x) { return x.id !== id; }); renderAll(); return Promise.resolve(); },
+      saveTpl: function (t) { state.tpl = t; return Promise.resolve(); }
+    };
+  }
+  function sortRows() {
+    state.rows.sort(function (a, b) {
+      return String(a.eduAt).localeCompare(String(b.eduAt)) || String(a.program).localeCompare(String(b.program)) || (a.createdAt || 0) - (b.createdAt || 0);
+    });
+  }
+  function connectDb(db) {
+    var col = db.collection('regs');
+    var timer = setTimeout(function () { setBanner('warn', '저장소 응답이 늦습니다. 표시된 내용이 최신이 아닐 수 있습니다.'); }, 10000);
+    store = {
+      add: function (d) { return col.add(d); },
+      update: function (id, patch) { return col.doc(id).update(patch); },
+      remove: function (id) { return col.doc(id).delete(); },
+      saveTpl: function (t) { return db.doc('config/sms').set({ template: t }); }
+    };
+    col.onSnapshot(function (snap) {
+      clearTimeout(timer);
+      state.rows = snap.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      sortRows();
+      state.ready = true; state.persisted = true;
+      setBanner('info', '');
+      renderAll();
+    }, function (e) {
+      clearTimeout(timer);
+      setBanner('bad', '저장소를 읽지 못했습니다(' + (e && e.code) + '). 페이지를 다시 열어 주세요.');
+    });
+    db.doc('config/sms').onSnapshot(function (s) {
+      if (s.exists && s.data().template) {
+        state.tpl = s.data().template;
+        if (document.activeElement !== $('tpl')) $('tpl').value = state.tpl;
+        renderSms();
+      }
+    }, function () {});
+  }
+
+  async function run(promise, okText) {
+    try { await promise; if (okText) toast(okText); return true; }
+    catch (e) { toast('저장하지 못했습니다. 이 화면을 연 계정에 편집 권한이 있는지 확인하세요.'); return false; }
+  }
+
+  /* ---------- 회차 선택 ---------- */
+  function sessions() {
+    var seen = {}, list = [];
+    state.rows.forEach(function (r) { var k = sessionKey(r); if (!seen[k]) { seen[k] = true; list.push(r); } });
+    return list;
+  }
+  function currentRows() {
+    return state.rows.filter(function (r) { return state.session === '' || sessionKey(r) === state.session; });
+  }
+  function currentSession() { return sessions().filter(function (r) { return sessionKey(r) === state.session; })[0] || null; }
+
+  function renderSessionSel() {
+    var list = sessions(), sel = $('sessionSel');
+    if (state.session === null || (state.session !== '' && !list.some(function (r) { return sessionKey(r) === state.session; }))) {
+      var now = ymd(new Date());
+      var next = list.filter(function (r) { return dayOf(r.eduAt) >= now; })[0] || list[list.length - 1];
+      state.session = next ? sessionKey(next) : '';
+    }
+    var html = state.tab === 'reg' ? '<option value="">전체 회차</option>' : '';
+    if (state.tab !== 'reg' && list.length === 0) html = '<option value="">등록된 회차가 없습니다</option>';
+    html += list.map(function (r) { return '<option value="' + esc(sessionKey(r)) + '">' + esc(sessionLabel(r)) + '</option>'; }).join('');
+    sel.innerHTML = html;
+    if (state.tab !== 'reg' && state.session === '' && list.length) state.session = sessionKey(list[0]);
+    sel.value = state.session;
+    $('sessionBar').hidden = state.tab === 'sms';
+
+    var progs = {}; state.rows.forEach(function (r) { progs[r.program] = 1; });
+    $('programList').innerHTML = Object.keys(progs).map(function (p) { return '<option value="' + esc(p) + '">'; }).join('');
+  }
+
+  /* ---------- 화면 그리기 ---------- */
+  function statsHtml(rows) {
+    var act = active(rows);
+    return '<span class="pill">접수 ' + act.length + '명</span>' + (rows.length - act.length ? '<span class="pill mute">취소 ' + (rows.length - act.length) + '명</span>' : '');
+  }
+
+  function renderReg() {
+    var rows = currentRows(), all = state.session === '';
+    $('regStats').innerHTML = statsHtml(rows);
+    if (!rows.length) { $('regList').innerHTML = '<div class="empty">접수된 분이 없습니다. 위에서 첫 접수를 입력하세요.</div>'; return; }
+    var n = 0;
+    $('regList').innerHTML = '<table><thead><tr><th>연번</th>' + (all ? '<th>회차</th>' : '') + '<th>성명</th><th>생년월일</th><th>전화번호</th><th>상태</th><th></th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var canceled = r.status === '취소';
+        if (!canceled) n++;
+        return '<tr class="' + (canceled ? 'cancel' : '') + '"><td>' + (canceled ? '-' : n) + '</td>' + (all ? '<td>' + esc(sessionLabel(r)) + '</td>' : '') +
+          '<td>' + esc(r.name) + '</td><td>' + esc(fmtBirth(r.birth)) + '</td><td>' + esc(r.phone) + '</td><td>' + esc(r.status || '접수') + '</td>' +
+          '<td class="acts"><button class="btn sm" data-act="toggle" data-id="' + esc(r.id) + '">' + (canceled ? '접수로 되돌리기' : '취소 처리') + '</button>' +
+          '<button class="btn sm danger" data-act="del" data-id="' + esc(r.id) + '">삭제</button></td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function renderAtt() {
+    var rows = active(currentRows());
+    var inn = rows.filter(function (r) { return r.attended === '출석'; }).length;
+    var out = rows.filter(function (r) { return r.attended === '불참'; }).length;
+    var rate = rows.length ? Math.round(inn / rows.length * 1000) / 10 : 0;
+    $('attStats').innerHTML = '<span class="pill">출석 ' + inn + '</span><span class="pill bad">불참 ' + out + '</span><span class="pill mute">미확인 ' + (rows.length - inn - out) + '</span><span class="pill">출석률 ' + rate + '%</span>';
+    $('allIn').disabled = !rows.length;
+    if (!rows.length) { $('attList').innerHTML = '<div class="empty">이 회차에 접수된 분이 없습니다.</div>'; return; }
+    $('attList').innerHTML = '<table><thead><tr><th>연번</th><th>성명</th><th>생년월일</th><th>전화번호</th><th>출석 여부</th></tr></thead><tbody>' +
+      rows.map(function (r, i) {
+        return '<tr><td>' + (i + 1) + '</td><td>' + esc(r.name) + '</td><td>' + esc(fmtBirth(r.birth)) + '</td><td>' + esc(r.phone) + '</td><td><div class="seg">' +
+          '<button class="' + (r.attended === '출석' ? 'on-in' : '') + '" data-act="att" data-v="출석" data-id="' + esc(r.id) + '">출석</button>' +
+          '<button class="' + (r.attended === '불참' ? 'on-out' : '') + '" data-act="att" data-v="불참" data-id="' + esc(r.id) + '">불참</button></div></td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function smsRows() {
+    var d = $('smsDate').value;
+    return active(state.rows).filter(function (r) { return dayOf(r.eduAt) === d; });
+  }
+  function renderSms() {
+    var rows = smsRows();
+    $('smsStats').innerHTML = '<span class="pill">' + rows.length + '명</span>';
+    $('smsCopy').disabled = $('smsCsv').disabled = !rows.length;
+    if (!rows.length) { $('smsList').innerHTML = '<div class="empty">' + esc($('smsDate').value || '선택한 날짜') + ' 교육 대상자가 없습니다.</div>'; return; }
+    $('smsList').innerHTML = '<table><thead><tr><th>성명</th><th>전화번호</th><th>문자 내용</th></tr></thead><tbody>' +
+      rows.map(function (r) { return '<tr><td>' + esc(r.name) + '</td><td>' + esc(r.phone) + '</td><td class="wrapcell">' + esc(fillTemplate(r)) + '</td></tr>'; }).join('') + '</tbody></table>';
+  }
+
+  function sheetRows() { return active(currentRows()); }
+  function renderSheet() {
+    var s = currentSession(), rows = sheetRows();
+    $('sheetHtml').disabled = $('sheetCsv').disabled = !s || !rows.length;
+    if (!s) { $('sheetPreview').innerHTML = '<div class="empty">출석부를 만들 회차가 없습니다.</div>'; return; }
+    $('sheetPreview').innerHTML = '<div class="sheet"><h3>서초영양길잡이 출석부 - ' + esc(s.program) + '</h3><div class="when">교육일시: ' + esc(koWhen(s.eduAt)) + ' · ' + rows.length + '명</div>' +
+      '<div class="tablewrap"><table><thead><tr><th>연번</th><th>성명</th><th>생년월일</th><th>전화번호</th><th>서명</th></tr></thead><tbody>' +
+      rows.map(function (r, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc(r.name) + '</td><td>' + esc(fmtBirth(r.birth)) + '</td><td>' + esc(r.phone) + '</td><td class="sign"></td></tr>'; }).join('') +
+      '</tbody></table></div></div>';
+  }
+
+  function renderTop() {
+    var days = {}; active(state.rows).forEach(function (r) { days[dayOf(r.eduAt)] = 1; });
+    $('topStats').innerHTML = '<span class="pill mute">회차 ' + sessions().length + '개</span><span class="pill mute">전체 접수 ' + active(state.rows).length + '명</span>';
+  }
+
+  function renderAll() {
+    renderSessionSel(); renderTop(); renderReg(); renderAtt(); renderSms(); renderSheet();
+    $('addBtn').disabled = !state.ready;
+  }
+
+  function setTab(t) {
+    state.tab = t;
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === t)); });
+    Array.prototype.forEach.call(document.querySelectorAll('.tabpane'), function (s) { s.style.display = s.id === 'tab-' + t ? 'flex' : 'none'; });
+    renderAll();
+  }
+
+  /* ---------- 이벤트 ---------- */
+  $('tabs').addEventListener('click', function (e) { var b = e.target.closest('.tab'); if (b) setTab(b.dataset.tab); });
+
+  $('sessionSel').addEventListener('change', function () {
+    state.session = $('sessionSel').value;
+    var s = currentSession();
+    if (s) { $('fProgram').value = s.program; $('fWhen').value = s.eduAt; }
+    renderAll();
+  });
+
+  $('regForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var msg = $('regMsg'); msg.className = 'msg'; msg.textContent = '';
+    var program = $('fProgram').value.trim(), eduAt = $('fWhen').value, name = $('fName').value.trim();
+    var birth = normBirth($('fBirth').value), phone = normPhone($('fPhone').value);
+    if (!program || !eduAt || !name) { msg.className = 'msg err'; msg.textContent = '프로그램명, 교육일시, 성명을 모두 입력하세요.'; return; }
+    if (!birth) { msg.className = 'msg err'; msg.textContent = '생년월일을 8자리로 입력하세요. 예: 19650412'; $('fBirth').focus(); return; }
+    if (!phone) { msg.className = 'msg err'; msg.textContent = '전화번호를 확인하세요. 예: 010-1234-5678'; $('fPhone').focus(); return; }
+    var key = program + '|' + eduAt;
+    var dup = state.rows.some(function (r) { return sessionKey(r) === key && r.name === name && r.phone === phone; });
+    if (dup) { msg.className = 'msg err'; msg.textContent = '같은 회차에 이미 접수된 분입니다.'; return; }
+    $('addBtn').disabled = true;
+    var ok = await run(store.add({ program: program, eduAt: eduAt, name: name, birth: birth, phone: phone, status: '접수', attended: '', createdAt: Date.now() }));
+    $('addBtn').disabled = !state.ready;
+    if (ok) {
+      state.session = key;
+      msg.className = 'msg ok'; msg.textContent = name + '님을 접수했습니다.';
+      $('fName').value = ''; $('fBirth').value = ''; $('fPhone').value = ''; $('fName').focus();
+      renderAll();
+    }
+  });
+
+  var delArmed = {};
+  $('regList').addEventListener('click', async function (e) {
+    var b = e.target.closest('button[data-act]'); if (!b) return;
+    var id = b.dataset.id, r = state.rows.filter(function (x) { return x.id === id; })[0]; if (!r) return;
+    if (b.dataset.act === 'toggle') { await run(store.update(id, { status: r.status === '취소' ? '접수' : '취소', attended: '' })); }
+    if (b.dataset.act === 'del') {
+      if (!delArmed[id]) {
+        delArmed[id] = true; b.textContent = '한 번 더 누르면 삭제';
+        setTimeout(function () { delete delArmed[id]; if (b.isConnected) b.textContent = '삭제'; }, 3000);
+        return;
+      }
+      delete delArmed[id];
+      await run(store.remove(id), '삭제했습니다.');
+    }
+  });
+
+  $('attList').addEventListener('click', async function (e) {
+    var b = e.target.closest('button[data-act="att"]'); if (!b) return;
+    var r = state.rows.filter(function (x) { return x.id === b.dataset.id; })[0]; if (!r) return;
+    await run(store.update(r.id, { attended: r.attended === b.dataset.v ? '' : b.dataset.v }));
+  });
+  $('allIn').addEventListener('click', async function () {
+    var todo = active(currentRows()).filter(function (r) { return !r.attended; });
+    for (var i = 0; i < todo.length; i++) { if (!(await run(store.update(todo[i].id, { attended: '출석' })))) return; }
+    toast(todo.length + '명을 출석 처리했습니다.');
+  });
+
+  $('smsDate').value = ymd(addDays(1));
+  $('smsDate').addEventListener('change', renderSms);
+  $('smsTomorrow').addEventListener('click', function () { $('smsDate').value = ymd(addDays(1)); renderSms(); });
+  $('smsToday').addEventListener('click', function () { $('smsDate').value = ymd(new Date()); renderSms(); });
+  $('tpl').value = state.tpl;
+  $('tpl').addEventListener('input', function () { state.tpl = $('tpl').value || DEFAULT_TPL; renderSms(); });
+  $('saveTpl').addEventListener('click', async function () {
+    var ok = await run(store.saveTpl(state.tpl));
+    $('tplMsg').className = 'msg ' + (ok ? 'ok' : 'err'); $('tplMsg').textContent = ok ? '문구를 저장했습니다.' : '저장하지 못했습니다.';
+  });
+
+  $('smsCopy').addEventListener('click', async function () {
+    var text = smsRows().map(function (r) { return [r.name, r.phone, fillTemplate(r).replace(/\s*\n\s*/g, ' ')].join('\t'); }).join('\n');
+    try { await navigator.clipboard.writeText(text); toast('복사했습니다. 엑셀이나 문자 서비스에 붙여넣으세요.'); }
+    catch (e) { toast('복사할 수 없는 화면입니다. CSV 저장을 사용하세요.'); }
+  });
+
+  async function saveFile(filename, data) {
+    try {
+      var dl = (typeof claude !== 'undefined') ? await claude.use('downloads') : null;
+      if (!dl) { toast('이 화면에서는 파일 저장을 쓸 수 없습니다.'); return; }
+      await dl.save({ filename: filename, data: data });
+    } catch (e) {
+      if (e && e.code === 'declined') return;
+      toast('파일을 저장하지 못했습니다.');
+    }
+  }
+  $('smsCsv').addEventListener('click', function () {
+    var rows = [['성명', '전화번호', '교육일시', '프로그램명', '문자내용']].concat(smsRows().map(function (r) { return [r.name, r.phone, koWhen(r.eduAt), r.program, fillTemplate(r)]; }));
+    saveFile('문자목록_' + $('smsDate').value + '.csv', toCsv(rows));
+  });
+  $('sheetCsv').addEventListener('click', function () {
+    var s = currentSession(); if (!s) return;
+    var rows = [['연번', '성명', '생년월일', '전화번호', '서명']].concat(sheetRows().map(function (r, i) { return [i + 1, r.name, fmtBirth(r.birth), r.phone, '']; }));
+    saveFile('출석부_' + safeName(s.program) + '_' + dayOf(s.eduAt) + '.csv', toCsv(rows));
+  });
+  $('sheetHtml').addEventListener('click', function () {
+    var s = currentSession(); if (!s) return;
+    var rows = sheetRows();
+    var body = rows.map(function (r, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc(r.name) + '</td><td>' + esc(fmtBirth(r.birth)) + '</td><td>' + esc(r.phone) + '</td><td></td></tr>'; }).join('');
+    var html = '<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>출석부 ' + esc(s.program) + '</title><style>' +
+      '@page{size:A4;margin:16mm}body{font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#000;margin:0;padding:16px}' +
+      'h1{font-size:20px;margin:0 0 4px}p{margin:0 0 14px;font-size:13px}table{border-collapse:collapse;width:100%;font-size:14px}' +
+      'th,td{border:1px solid #000;padding:6px 8px;height:34px;text-align:center}th{background:#eee}td:nth-child(5){width:32%}' +
+      '.noprint{margin-bottom:14px}@media print{.noprint{display:none}}</style></head><body>' +
+      '<div class="noprint"><button onclick="window.print()">인쇄</button></div>' +
+      '<h1>서초영양길잡이 출석부 - ' + esc(s.program) + '</h1><p>교육일시: ' + esc(koWhen(s.eduAt)) + ' / 접수 ' + rows.length + '명</p>' +
+      '<table><thead><tr><th>연번</th><th>성명</th><th>생년월일</th><th>전화번호</th><th>서명</th></tr></thead><tbody>' + body + '</tbody></table></body></html>';
+    saveFile('출석부_' + safeName(s.program) + '_' + dayOf(s.eduAt) + '.html', html);
+  });
+
+  /* ---------- 시작 ---------- */
+  var now = new Date(); now.setMinutes(0, 0, 0); now.setHours(now.getHours() + 24);
+  $('fWhen').value = ymd(now) + 'T14:00';
+  store = makeLocalStore();
+  renderAll();
+
+  (async function init() {
+    var db = null;
+    try { db = (typeof claude !== 'undefined') ? await claude.use('db') : null; } catch (e) { db = null; }
+    if (db) { connectDb(db); }
+    else {
+      state.ready = true;
+      setBanner('warn', '저장소에 연결되지 않았습니다. 이 화면을 닫으면 입력한 내용이 사라집니다. 로그인한 상태로 다시 열어 주세요.');
+      renderAll();
+    }
+  })();
+})();
+</script>
+</body>
+</html>
